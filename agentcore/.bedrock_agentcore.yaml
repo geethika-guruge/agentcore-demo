@@ -1,0 +1,48 @@
+default_agent: order_assistant
+agents:
+  order_assistant:
+    name: order_assistant
+    entrypoint: interface.py
+    deployment_type: container
+    runtime_type: null
+    platform: linux/arm64
+    container_runtime: docker
+    source_path: null
+    aws:
+      execution_role: arn:aws:iam::354334841216:role/AmazonBedrockAgentCoreSDKRuntime-ap-southeast-2-b285deea2f
+      execution_role_auto_create: false
+      account: '354334841216'
+      region: ap-southeast-2
+      ecr_repository: 354334841216.dkr.ecr.ap-southeast-2.amazonaws.com/bedrock-agentcore-order_assistant
+      ecr_auto_create: false
+      s3_path: null
+      s3_auto_create: false
+      network_configuration:
+        network_mode: PUBLIC
+        network_mode_config: null
+      protocol_configuration:
+        server_protocol: HTTP
+      observability:
+        enabled: true
+      lifecycle_configuration:
+        idle_runtime_session_timeout: null
+        max_lifetime: null
+    bedrock_agentcore:
+      agent_id: order_assistant-W4tp3BF8AV
+      agent_arn: arn:aws:bedrock-agentcore:ap-southeast-2:354334841216:runtime/order_assistant-W4tp3BF8AV
+      agent_session_id: a77d81d7-8639-4f95-b367-9abe16900cc1
+    codebuild:
+      project_name: bedrock-agentcore-order_assistant-builder
+      execution_role: arn:aws:iam::354334841216:role/AmazonBedrockAgentCoreSDKCodeBuild-ap-southeast-2-b285deea2f
+      source_bucket: bedrock-agentcore-codebuild-sources-354334841216-ap-southeast-2
+    memory:
+      mode: NO_MEMORY
+      memory_id: null
+      memory_arn: null
+      memory_name: null
+      event_expiry_days: 30
+      first_invoke_memory_check_done: false
+      was_created_by_toolkit: false
+    authorizer_configuration: null
+    request_header_configuration: null
+    oauth_configuration: null
