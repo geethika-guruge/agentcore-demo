@@ -1,0 +1,34 @@
+{
+  "name": "query_table",
+  "description": "Query a DynamoDB table using partition key and optional sort key conditions. More efficient than scan for retrieving specific items.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "table_name": {
+        "type": "string",
+        "description": "The name of the DynamoDB table to query"
+      },
+      "key_condition_expression": {
+        "type": "string",
+        "description": "Key condition expression (e.g., 'product_id = :pid')"
+      },
+      "expression_attribute_values": {
+        "type": "object",
+        "description": "Map of expression attribute values (e.g., {':pid': 'PROD123'})"
+      },
+      "filter_expression": {
+        "type": "string",
+        "description": "Optional filter expression to further refine query results"
+      },
+      "index_name": {
+        "type": "string",
+        "description": "Optional name of a secondary index to query"
+      },
+      "limit": {
+        "type": "number",
+        "description": "Maximum number of items to return"
+      }
+    },
+    "required": ["table_name", "key_condition_expression", "expression_attribute_values"]
+  }
+}

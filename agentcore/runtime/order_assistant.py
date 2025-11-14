@@ -1,7 +1,7 @@
 from bedrock_agentcore.runtime import BedrockAgentCoreApp
 import logging
 import json
-from agent import process_grocery_list
+from core import process_grocery_list
 
 logger = logging.getLogger(__name__)
 
@@ -47,4 +47,3 @@ def invoke(payload):
 
 if __name__ == "__main__":
     app.run()
-

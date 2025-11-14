@@ -1,3 +1,6 @@
 bedrock-agentcore
 strands-agents
 strands-agents-tools
+bedrock-agentcore-starter-toolkit
+mcp
+boto3

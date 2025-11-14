@@ -2,12 +2,12 @@ default_agent: order_assistant
 agents:
   order_assistant:
     name: order_assistant
-    entrypoint: interface.py
+    entrypoint: /Users/dinindu/Projects/GitHub/order-assistant/agentcore/runtime/order_assistant.py
     deployment_type: container
     runtime_type: null
     platform: linux/arm64
     container_runtime: docker
-    source_path: null
+    source_path: /Users/dinindu/Projects/GitHub/order-assistant/agentcore/runtime
     aws:
       execution_role: arn:aws:iam::354334841216:role/AmazonBedrockAgentCoreSDKRuntime-ap-southeast-2-b285deea2f
       execution_role_auto_create: false
@@ -28,9 +28,9 @@ agents:
         idle_runtime_session_timeout: null
         max_lifetime: null
     bedrock_agentcore:
-      agent_id: order_assistant-W4tp3BF8AV
-      agent_arn: arn:aws:bedrock-agentcore:ap-southeast-2:354334841216:runtime/order_assistant-W4tp3BF8AV
-      agent_session_id: a77d81d7-8639-4f95-b367-9abe16900cc1
+      agent_id: order_assistant-2Ia07Y64Aq
+      agent_arn: arn:aws:bedrock-agentcore:ap-southeast-2:354334841216:runtime/order_assistant-2Ia07Y64Aq
+      agent_session_id: ea52a6ab-993c-46b0-9808-9e62237ed22e
     codebuild:
       project_name: bedrock-agentcore-order_assistant-builder
       execution_role: arn:aws:iam::354334841216:role/AmazonBedrockAgentCoreSDKCodeBuild-ap-southeast-2-b285deea2f

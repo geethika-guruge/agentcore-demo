@@ -1,0 +1,18 @@
+{
+  "name": "get_item",
+  "description": "Retrieve a single item from a DynamoDB table by its primary key. Most efficient way to get a specific item.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "table_name": {
+        "type": "string",
+        "description": "The name of the DynamoDB table"
+      },
+      "key": {
+        "type": "object",
+        "description": "Primary key of the item to retrieve (e.g., {'product_id': 'PROD123'})"
+      }
+    },
+    "required": ["table_name", "key"]
+  }
+}
