@@ -1,0 +1,9 @@
+{
+  "name": "list_tables",
+  "description": "List all DynamoDB tables in the configured AWS region. Returns table names that can be used with other DynamoDB operations.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {},
+    "required": []
+  }
+}

@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 import aws_cdk as cdk
-from stack import InfraStack
+from stack import OrderAssistantStack
 
 
 app = cdk.App()
-InfraStack(app, "InfraStack")
+OrderAssistantStack(app, "OrderAssistantStack")
 
 app.synth()
