@@ -1,0 +1,14 @@
+{
+  "name": "get_customer_postcode",
+  "description": "Retrieve the postcode for a customer using their customer ID (mobile number). Use this to find out which delivery area a customer is in before querying available delivery slots.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "customer_id": {
+        "type": "string",
+        "description": "The customer's ID (mobile number) to look up. Example: '6421234567'"
+      }
+    },
+    "required": ["customer_id"]
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "name": "get_order",
+  "description": "Retrieve order details by order_id. Returns complete order information including customer details, items, status, and timestamps.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "order_id": {
+        "type": "string",
+        "description": "The unique order ID to retrieve (format: ORD-YYYYMMDDHHMMSS-XXXXXXXX)"
+      }
+    },
+    "required": ["order_id"]
+  }
+}

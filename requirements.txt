@@ -1,6 +1,7 @@
-aws-cdk-lib==2.202.0
-bedrock-agentcore-starter-toolkit
+aws-cdk-lib==2.224.0
 constructs>=10.0.0,<11.0.0
 bedrock-agentcore
 strands-agents
 strands-agents-tools
+bedrock-agentcore-starter-toolkit
+psycopg2-binary

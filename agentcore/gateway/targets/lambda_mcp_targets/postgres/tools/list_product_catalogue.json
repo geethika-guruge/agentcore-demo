@@ -1,0 +1,9 @@
+{
+  "name": "list_product_catalogue",
+  "description": "Retrieve all products from the product catalogue. Returns complete product details including product_name, product_description, product_category, price, and stock_level for all available products.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {},
+    "required": []
+  }
+}

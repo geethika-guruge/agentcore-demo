@@ -1,6 +1,5 @@
 from bedrock_agentcore.runtime import BedrockAgentCoreApp
 import logging
-import json
 from core import process_grocery_list
 
 logger = logging.getLogger(__name__)
@@ -11,36 +10,33 @@ app = BedrockAgentCoreApp()
 @app.entrypoint
 def invoke(payload):
     """Handler for Bedrock agent invocation"""
-    logger.info(f"Received payload type: {type(payload)}, value: {payload}")
+    print(f"Received payload type: {type(payload)}")
+    print(f"Received payload value: {payload}")
 
-    grocery_items = []
-
-    # Handle list payload directly
-    if isinstance(payload, list):
-        grocery_items = payload
-    # Handle dict payload
-    elif isinstance(payload, dict):
-        grocery_items = payload.get("grocery_items", [])
-        if not grocery_items:
-            text_input = payload.get("prompt", payload.get("inputText", ""))
-            if text_input:
-                grocery_items = text_input.split("\n")
-    # Handle string payload
-    elif isinstance(payload, str):
+    # Handle both dict and string payloads (AgentCore may send JSON string)
+    if isinstance(payload, str):
+        import json
         try:
-            parsed = json.loads(payload)
-            if isinstance(parsed, list):
-                grocery_items = parsed
-            else:
-                grocery_items = parsed.get("grocery_items", [parsed])
-        except:
-            grocery_items = [payload]
+            payload = json.loads(payload)
+            print(f"Parsed string payload to dict: {payload}")
+        except json.JSONDecodeError as e:
+            print(f"Failed to parse payload as JSON: {e}")
+            return "Error: Invalid JSON payload"
 
-    logger.info(f"Processing grocery items: {grocery_items}")
+    if not isinstance(payload, dict):
+        print(f"Invalid payload format. Expected dict, got {type(payload)}: {payload}")
+        return "Error: Invalid payload format"
 
-    result = process_grocery_list(grocery_items)
+    action = payload.get("action", "UNKNOWN")
+    customer_id = payload.get("customer_id", "unknown")
 
-    logger.info(f"Processing completed")
+    print(f"Processing action '{action}' for customer {customer_id}")
+    print(f"Full payload being sent to process_grocery_list: {payload}")
+
+    # Pass full payload to orchestrator for processing
+    result = process_grocery_list(payload)
+
+    print(f"Processing completed")
 
     return result
 

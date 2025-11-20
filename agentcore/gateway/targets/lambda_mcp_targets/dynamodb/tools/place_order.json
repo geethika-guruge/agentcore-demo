@@ -1,0 +1,31 @@
+{
+  "name": "place_order",
+  "description": "Place a new order in the orders table. Creates a new order with a unique order_id and stores it in DynamoDB with customer_id, items, total_amount, status, and timestamps. Returns order confirmation with order details.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "customer_id": {
+        "type": "string",
+        "description": "Unique identifier for the customer placing the order (mobile number)"
+      },
+      "items": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "product_name": {"type": "string"},
+            "product_category": {"type": "string"},
+            "quantity": {"type": "number"},
+            "price": {"type": "number"}
+          }
+        },
+        "description": "List of items in the order with product details and quantities"
+      },
+      "total_amount": {
+        "type": "number",
+        "description": "Total order amount in dollars"
+      }
+    },
+    "required": ["customer_id", "items", "total_amount"]
+  }
+}

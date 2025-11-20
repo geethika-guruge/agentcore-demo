@@ -1,0 +1,17 @@
+{
+  "name": "search_products_by_product_names",
+  "description": "Search for products by their names in the product catalog. Supports partial matching and multiple product names. Returns product details including name, description, category, price, and stock_level.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "product_names": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "List of product names to search for (supports partial matching, e.g., ['milk', 'bread', 'eggs'])"
+      }
+    },
+    "required": ["product_names"]
+  }
+}
