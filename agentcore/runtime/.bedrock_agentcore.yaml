@@ -2,14 +2,14 @@ default_agent: order_assistant
 agents:
   order_assistant:
     name: order_assistant
-    entrypoint: /Users/dinindu/Projects/GitHub/order-assistant/agentcore/runtime/order_assistant.py
+    entrypoint: /Users/geethika/work/dini-shopping-agent/order-assistant/agentcore/runtime/order_assistant.py
     deployment_type: container
     runtime_type: null
     platform: linux/arm64
     container_runtime: docker
-    source_path: /Users/dinindu/Projects/GitHub/order-assistant/agentcore/runtime
+    source_path: /Users/geethika/work/dini-shopping-agent/order-assistant/agentcore/runtime
     aws:
-      execution_role: arn:aws:iam::354334841216:role/AmazonBedrockAgentCoreSDKRuntime-ap-southeast-2-b285deea2f
+      execution_role: arn:aws:iam::354334841216:role/OrderAssistantStack-AgentCoreExecutionRole416A5DC1-2SfRVaoky9Dt
       execution_role_auto_create: false
       account: '354334841216'
       region: ap-southeast-2
@@ -30,7 +30,7 @@ agents:
     bedrock_agentcore:
       agent_id: order_assistant-2Ia07Y64Aq
       agent_arn: arn:aws:bedrock-agentcore:ap-southeast-2:354334841216:runtime/order_assistant-2Ia07Y64Aq
-      agent_session_id: ea52a6ab-993c-46b0-9808-9e62237ed22e
+      agent_session_id: null
     codebuild:
       project_name: bedrock-agentcore-order_assistant-builder
       execution_role: arn:aws:iam::354334841216:role/AmazonBedrockAgentCoreSDKCodeBuild-ap-southeast-2-b285deea2f

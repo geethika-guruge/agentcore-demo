@@ -62,20 +62,20 @@ def setup_gateway():
 
     # Step 2.4: Store client_info in AWS Secrets Manager
     print("Step 2.4: Storing credentials in AWS Secrets Manager...")
-    secrets_client = boto3.client('secretsmanager', region_name=region)
+    secrets_client = boto3.client("secretsmanager", region_name=region)
     secret_name = f"agentcore/gateway/{gateway['gatewayId']}/client-info"
 
     try:
         secrets_client.create_secret(
             Name=secret_name,
             Description=f"Gateway client credentials for {gateway['gatewayId']}",
-            SecretString=json.dumps(cognito_response["client_info"])
+            SecretString=json.dumps(cognito_response["client_info"]),
         )
         print(f"✓ Credentials stored in Secrets Manager: {secret_name}\n")
     except secrets_client.exceptions.ResourceExistsException:
         secrets_client.update_secret(
             SecretId=secret_name,
-            SecretString=json.dumps(cognito_response["client_info"])
+            SecretString=json.dumps(cognito_response["client_info"]),
         )
         print(f"✓ Credentials updated in Secrets Manager: {secret_name}\n")
 

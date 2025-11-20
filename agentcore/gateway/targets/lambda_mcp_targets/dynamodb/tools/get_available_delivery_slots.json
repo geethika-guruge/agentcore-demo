@@ -1,0 +1,34 @@
+{
+  "name": "get_available_delivery_slots",
+  "description": "Get the earliest available delivery slot from the warehouse. By default returns only the single earliest available slot. Can optionally return multiple slots if earliest_only is set to false. Use this to find the next available delivery time for customer orders.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "status_filter": {
+        "type": "string",
+        "description": "Filter slots by status. Should always be 'available' to get bookable slots. Options: available, fully_booked, blocked."
+      },
+      "postcode": {
+        "type": "string",
+        "description": "Postcode to filter slots by coverage area (e.g., 'SW1A', 'EC1A'). Only slots covering this postcode will be returned."
+      },
+      "start_date": {
+        "type": "string",
+        "description": "Start date for the query in YYYY-MM-DD format (e.g., '2025-12-03'). If not provided, defaults to today."
+      },
+      "end_date": {
+        "type": "string",
+        "description": "End date for the query in YYYY-MM-DD format (e.g., '2025-12-10'). If not provided, defaults to 7 days from start_date."
+      },
+      "earliest_only": {
+        "type": "boolean",
+        "description": "If true (defaults to true), returns only the earliest available slot. Set to false to get all available slots in the date range."
+      },
+      "query_delivery_slots": {
+        "type": "boolean",
+        "description": "Flag to explicitly indicate this is a delivery slots query. Set to true when calling this tool (defaults to true)."
+      }
+    },
+    "required": []
+  }
+}
