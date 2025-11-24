@@ -2,18 +2,18 @@ default_agent: order_assistant
 agents:
   order_assistant:
     name: order_assistant
-    entrypoint: /Users/geethika/work/agentcore-demo/agentcore/runtime/order_assistant.py
+    entrypoint: /Users/geethika/work/dini-shopping-agent/order-assistant/agentcore/runtime/order_assistant.py
     deployment_type: container
     runtime_type: null
     platform: linux/arm64
     container_runtime: docker
-    source_path: /Users/geethika/work/agentcore-demo/agentcore/runtime
+    source_path: /Users/geethika/work/dini-shopping-agent/order-assistant/agentcore/runtime
     aws:
-      execution_role: arn:aws:iam::610251782643:role/OrderAssistantStack-AgentCoreExecutionRole416A5DC1-swqctijyTxLK
+      execution_role: arn:aws:iam::116354729252:role/OrderAssistantStack-AgentCoreExecutionRole416A5DC1-JZQ9oEvxMzzw
       execution_role_auto_create: true
-      account: '610251782643'
+      account: '116354729252'
       region: ap-southeast-2
-      ecr_repository: 610251782643.dkr.ecr.ap-southeast-2.amazonaws.com/bedrock-agentcore-order_assistant
+      ecr_repository: 116354729252.dkr.ecr.ap-southeast-2.amazonaws.com/bedrock-agentcore-order_assistant
       ecr_auto_create: false
       s3_path: null
       s3_auto_create: false
@@ -28,13 +28,13 @@ agents:
         idle_runtime_session_timeout: null
         max_lifetime: null
     bedrock_agentcore:
-      agent_id: order_assistant-PBiN0O4lZ7
-      agent_arn: arn:aws:bedrock-agentcore:ap-southeast-2:610251782643:runtime/order_assistant-PBiN0O4lZ7
+      agent_id: order_assistant-nKMp5ICChD
+      agent_arn: arn:aws:bedrock-agentcore:ap-southeast-2:116354729252:runtime/order_assistant-nKMp5ICChD
       agent_session_id: null
     codebuild:
       project_name: bedrock-agentcore-order_assistant-builder
-      execution_role: arn:aws:iam::610251782643:role/AmazonBedrockAgentCoreSDKCodeBuild-ap-southeast-2-b285deea2f
-      source_bucket: bedrock-agentcore-codebuild-sources-610251782643-ap-southeast-2
+      execution_role: arn:aws:iam::116354729252:role/AmazonBedrockAgentCoreSDKCodeBuild-ap-southeast-2-b285deea2f
+      source_bucket: bedrock-agentcore-codebuild-sources-116354729252-ap-southeast-2
     memory:
       mode: NO_MEMORY
       memory_id: null
