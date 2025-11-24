@@ -1,7 +1,7 @@
 import os
 import logging
 import atexit
-from strands import Agent, tool
+from strands import Agent
 from strands.models import BedrockModel
 from strands.tools.mcp.mcp_client import MCPClient
 from strands_tools import image_reader
@@ -11,6 +11,8 @@ from typing import Dict, Any
 import json
 import pathlib
 import boto3
+from strands.multiagent import GraphBuilder
+import yaml
 
 BASE_DIR = pathlib.Path(__file__).absolute().parent
 
@@ -18,6 +20,30 @@ BASE_DIR = pathlib.Path(__file__).absolute().parent
 logger = logging.getLogger()
 if not logger.handlers:
     logging.basicConfig(level=logging.INFO)
+
+# Load model configuration
+MODEL_CONFIG = None
+
+
+def load_model_config() -> Dict[str, Any]:
+    """Load model configuration from YAML file"""
+    global MODEL_CONFIG
+
+    if MODEL_CONFIG is not None:
+        return MODEL_CONFIG
+
+    config_path = BASE_DIR / "model_config.yaml"
+    try:
+        with open(config_path, "r") as f:
+            MODEL_CONFIG = yaml.safe_load(f)
+        logger.info(f"Loaded model configuration from {config_path}")
+        return MODEL_CONFIG
+    except FileNotFoundError:
+        logger.error(f"Model config file not found at {config_path}")
+        raise
+    except Exception as e:
+        logger.error(f"Error loading model config: {e}")
+        raise
 
 # Global state
 bedrock_model = None
@@ -157,34 +183,55 @@ def load_mcp_tools(tool_filter=None):
         return []
 
 
-def create_bedrock_model() -> BedrockModel:
-    """Create a BedrockModel for the agents"""
-    region = os.environ.get("AWS_REGION", "ap-southeast-2")
-    model_id = os.environ.get(
-        "BEDROCK_MODEL_ID", "apac.anthropic.claude-sonnet-4-20250514-v1:0"
-    )
+def create_bedrock_model(agent_name: str) -> BedrockModel:
+    """Create a BedrockModel for a specific agent
+
+    Args:
+        agent_name: Name of the agent (e.g., 'orchestrator', 'catalog', 'order', 'warehouse', 'image_processor')
+    """
+    config = load_model_config()
+
+    # Get agent-specific config
+    if agent_name not in config.get("agents", {}):
+        raise ValueError(f"No configuration found for agent '{agent_name}' in model_config.yaml")
+
+    agent_config = config["agents"][agent_name]
+
+    # Read directly from config
+    region = agent_config.get("region")
+    model_id = agent_config.get("model_id")
+    # temperature = agent_config.get("temperature")
+    # max_tokens = agent_config.get("max_tokens")
+
+    # Validate required fields
+    if not model_id:
+        raise ValueError(f"model_id not configured for agent '{agent_name}'")
+    if not region:
+        raise ValueError(f"region not configured for agent '{agent_name}'")
+    # if temperature is None:
+    #     raise ValueError(f"temperature not configured for agent '{agent_name}'")
+    # if max_tokens is None:
+    #     raise ValueError(f"max_tokens not configured for agent '{agent_name}'")
 
     try:
-        logger.info(f"Creating Bedrock model: {model_id}")
+        logger.info(f"Creating Bedrock model for '{agent_name}' agent using model: {model_id}")
         model = BedrockModel(
             model_id=model_id,
             region_name=region,
-            temperature=0.1,
-            max_tokens=4000,
+            # temperature=temperature,
+            # max_tokens=max_tokens,
         )
-        logger.info(f"Successfully created Bedrock model")
+        print(f"✓ '{agent_name}' agent created with model: {model_id}")
+        logger.info(f"✓ '{agent_name}' agent successfully created with model: {model_id}")
         return model
     except Exception as e:
-        logger.error(f"Failed to create model: {e}")
+        logger.error(f"Failed to create model for {agent_name}: {e}")
         raise
 
 
 def initialize_agents():
-    """Initialize the specialized agents"""
+    """Initialize the specialized agents with individual model configurations"""
     global catalog_agent, order_agent, wm_agent, image_processor_agent, bedrock_model
-
-    if bedrock_model is None:
-        bedrock_model = create_bedrock_model()
 
     # Load custom PostgreSQL tools for product catalog
     postgres_tools = load_mcp_tools(
@@ -220,98 +267,203 @@ def initialize_agents():
     sys.path.insert(0, str(BASE_DIR / "tools"))
     from s3_tools import download_image_from_s3
 
+    # Create agent-specific models
+    print("\n=== Initializing Agents ===")
+    logger.info("=== Initializing Agents ===")
+
+    catalog_model = create_bedrock_model("catalog")
+    order_model = create_bedrock_model("order")
+    wm_model = create_bedrock_model("warehouse")
+    image_processor_model = create_bedrock_model("image_processor")
+
     # Catalog Agent - searches product catalog with PostgreSQL access
     catalog_agent = Agent(
         system_prompt=(BASE_DIR / "prompts/catalog.md").read_text(),
         tools=postgres_tools,
-        model=bedrock_model,
+        model=catalog_model,
     )
+    logger.info("✓ Catalog agent initialized")
 
     # Order Agent - handles order placement with custom DynamoDB tools
     order_agent = Agent(
         system_prompt=(BASE_DIR / "prompts/order.md").read_text(),
         tools=order_tools,
-        model=bedrock_model,
+        model=order_model,
     )
+    logger.info("✓ Order agent initialized")
 
     # WM Agent - handles warehouse management and delivery scheduling with DynamoDB access
     wm_agent = Agent(
         system_prompt=(BASE_DIR / "prompts/wm.md").read_text(),
         tools=wm_tools,
-        model=bedrock_model,
+        model=wm_model,
     )
+    logger.info("✓ Warehouse agent initialized")
 
     # Image Processor Agent - extracts grocery lists from images using S3 + image_reader
     image_processor_agent = Agent(
         system_prompt=(BASE_DIR / "prompts/image_processor.md").read_text(),
         tools=[download_image_from_s3, image_reader],
-        model=bedrock_model,
+        model=image_processor_model,
     )
+    logger.info("✓ Image processor agent initialized")
+
+    print("=== All Agents Initialized ===\n")
 
 
-@tool
-def catalog_specialist(query: str) -> str:
-    """Search product catalog and suggest items"""
+def create_router_agent() -> Agent:
+    """Create router agent that routes requests and returns responses to user"""
+    router_model = create_bedrock_model("orchestrator")
+
+    router = Agent(
+        system_prompt=(BASE_DIR / "prompts/router.md").read_text(),
+        model=router_model,
+    )
+    logger.info("✓ Router (orchestrator) agent initialized")
+
+    return router
+
+
+def build_order_processing_graph():
+    """Build a graph with two workflow paths:
+
+    Path 1 (New Order - Image):
+        router (routing) → image_processor → catalog → router (return) [END]
+        Router returns catalog options to user
+
+    Path 2 (User Confirmation):
+        router (routing) → order → warehouse → router (return) [END]
+        Router returns final order confirmation with delivery details to user
+    """
+    global catalog_agent, order_agent, wm_agent, image_processor_agent
+
+    # Initialize agents first
     if catalog_agent is None:
         initialize_agents()
-    response = catalog_agent(query)
-    return str(response)
 
+    # Create router agent
+    print(f"Creating router agent...")
+    router = create_router_agent()
+    print(f"✓ Router agent created")
 
-@tool
-def order_specialist(order_details: str) -> str:
-    """Place order and send confirmation"""
-    if order_agent is None:
-        initialize_agents()
-    response = order_agent(order_details)
-    return str(response)
+    # Create graph builder
+    builder = GraphBuilder()
 
+    # Add all nodes
+    print(f"Adding router node...")
+    builder.add_node(router, "router")
+    print(f"✓ Router node added")
 
-@tool
-def wm_specialist(delivery_request: str) -> str:
-    """Get available delivery slots from warehouse"""
-    if wm_agent is None:
-        initialize_agents()
-    response = wm_agent(delivery_request)
-    return str(response)
+    print(f"Adding image_processor node...")
+    builder.add_node(image_processor_agent, "image_processor")
+    print(f"✓ Image processor node added")
 
+    print(f"Adding catalog node...")
+    builder.add_node(catalog_agent, "catalog")
+    print(f"✓ Catalog node added")
 
-@tool
-def image_processor_specialist(s3_bucket: str, s3_key: str) -> str:
-    """Extract grocery list from image in S3"""
-    if image_processor_agent is None:
-        initialize_agents()
-    prompt = f"Extract the grocery list from the image at s3://{s3_bucket}/{s3_key}"
-    response = image_processor_agent(prompt)
-    return str(response)
+    print(f"Adding order node...")
+    builder.add_node(order_agent, "order")
+    print(f"✓ Order node added")
 
+    print(f"Adding warehouse node...")
+    builder.add_node(wm_agent, "warehouse")
+    print(f"✓ Warehouse node added")
 
-def get_orchestrator_agent() -> Agent:
-    """Get or create the orchestrator agent"""
-    global orchestrator_agent, bedrock_model
+    # Set entry point
+    print(f"Setting entry point to router...")
+    builder.set_entry_point("router")
+    print(f"✓ Entry point set successfully")
 
-    if orchestrator_agent is None:
-        if bedrock_model is None:
-            bedrock_model = create_bedrock_model()
+    # Path 1: Image flow (router → image_processor → catalog)
+    print(f"Adding edges for Path 1 (Image flow)...")
+    def is_image_request(result):
+        """Check if this is an image processing request"""
+        # Extract just the router's latest output from GraphState.results
+        router_output = ""
 
-        initialize_agents()
+        if hasattr(result, 'results') and 'router' in result.results:
+            router_result = result.results['router']
+            if hasattr(router_result, 'result'):
+                agent_result = router_result.result
+                if hasattr(agent_result, 'message'):
+                    message = agent_result.message
+                    # Message is a dict with structure: {'role': 'assistant', 'content': [{'text': '...'}]}
+                    if isinstance(message, dict) and 'content' in message and len(message['content']) > 0:
+                        router_output = str(message['content'][0].get('text', ''))
 
-        orchestrator_agent = Agent(
-            system_prompt=(BASE_DIR / "prompts/orchestrator.md").read_text(),
-            tools=[
-                catalog_specialist,
-                order_specialist,
-                wm_specialist,
-                image_processor_specialist,
-            ],
-            model=bedrock_model,
-        )
+        # Fallback to string conversion if extraction failed
+        if not router_output:
+            router_output = str(result)
 
-    return orchestrator_agent
+        result_str = router_output.lower()
+        is_image = "route_to_image" in result_str
+
+        print(f"🔍 is_image_request: {is_image}")
+        logger.info(f"is_image_request: {is_image}")
+
+        return is_image
+
+    builder.add_edge("router", "image_processor", condition=is_image_request)
+    builder.add_edge("image_processor", "catalog")
+    builder.add_edge("catalog", "router")  # Return to router to relay options to user
+    print(f"✓ Path 1 edges added: router → image_processor → catalog → router [END]")
+
+    # Path 2: Confirmation flow (router → order → warehouse)
+    print(f"Adding edges for Path 2 (Confirmation flow)...")
+    def is_order_request(result):
+        """Check if this is a user confirmation for order placement"""
+        # Extract just the router's latest output from GraphState.results
+        router_output = ""
+
+        # Extract just the router's latest output from GraphState.results
+        if hasattr(result, 'results') and 'router' in result.results:
+            router_result = result.results['router']
+            if hasattr(router_result, 'result'):
+                agent_result = router_result.result
+                if hasattr(agent_result, 'message'):
+                    message = agent_result.message
+                    # Message is a dict with structure: {'role': 'assistant', 'content': [{'text': '...'}]}
+                    if isinstance(message, dict) and 'content' in message and len(message['content']) > 0:
+                        router_output = str(message['content'][0].get('text', ''))
+
+        # Fallback to string conversion if extraction failed
+        if not router_output:
+            router_output = str(result)
+
+        result_str = router_output.lower()
+
+        # Router outputs order details with "Selected Option" and "Items to Order"
+        # Must NOT contain "route_to_image" to avoid confusion with Path 1
+        has_order_keywords = "selected option" in result_str and "items to order" in result_str
+        has_total_and_customer = "total amount" in result_str and "customer id" in result_str
+        is_not_image_route = "route_to_image" not in result_str
+
+        is_order = (has_order_keywords or has_total_and_customer) and is_not_image_route
+
+        print(f"🔍 is_order_request: {is_order} (order_kw={has_order_keywords}, total_cust={has_total_and_customer}, not_img={is_not_image_route})")
+        logger.info(f"is_order_request: {is_order}, has_order_keywords: {has_order_keywords}, has_total_and_customer: {has_total_and_customer}, is_not_image_route: {is_not_image_route}")
+
+        return is_order
+
+    builder.add_edge("router", "order", condition=is_order_request)
+    builder.add_edge("order", "warehouse")
+    builder.add_edge("warehouse", "router")  # Return to router to relay final confirmation to user
+    print(f"✓ Path 2 edges added: router → order → warehouse → router [END]")
+
+    # Set execution limits
+    print(f"Setting execution limits...")
+    builder.set_execution_timeout(300)  # 5 minutes
+    builder.set_max_node_executions(10)  # Prevent infinite loops
+    print(f"✓ Execution limits set (timeout: 300s, max executions: 10)")
+
+    logger.info("✓ Graph built with two workflow paths")
+    print(f"✓ Graph built successfully with two workflow paths")
+    return builder.build()
 
 
 def process_grocery_list(payload: dict) -> str:
-    """Process a grocery list and return order proposal
+    """Process a grocery list using graph-based multi-agent system
 
     Args:
         payload: Dictionary containing:
@@ -324,7 +476,8 @@ def process_grocery_list(payload: dict) -> str:
             - instruction: Additional instruction text (optional)
     """
     try:
-        agent = get_orchestrator_agent()
+        # Build the graph
+        graph = build_order_processing_graph()
 
         # Build prompt with customer_id and action-specific content
         customer_id = payload.get("customer_id", "")
@@ -334,38 +487,48 @@ def process_grocery_list(payload: dict) -> str:
         s3_bucket = payload.get("s3_bucket")
         s3_key = payload.get("s3_key")
         instruction = payload.get("instruction", "")
+        catalog_options = payload.get("catalog_options", "")
 
-        # Build structured prompt
+        # Build minimal structured prompt - let orchestrator decide routing
         prompt_parts = []
 
         if customer_id:
             prompt_parts.append(f"Customer ID: {customer_id}")
 
-        # Handle different action types
+        # Just provide the data - orchestrator will decide what to do
         if action == "TEXT_MESSAGE" and message:
             prompt_parts.append(f"User Message: {message}")
-            prompt_parts.append("Please process this user input and continue with the order workflow.")
         elif s3_bucket and s3_key:
             prompt_parts.append(f"S3 Bucket: {s3_bucket}")
             prompt_parts.append(f"S3 Key: {s3_key}")
-            prompt_parts.append("Please extract the grocery list from the image and create an order proposal.")
         elif grocery_list:
             items_text = "\n".join(grocery_list)
             prompt_parts.append(f"Grocery List:\n{items_text}")
-            prompt_parts.append("Please create an order proposal for these items.")
         elif instruction:
             prompt_parts.append(instruction)
 
+        # Include catalog options if available (for Path 2)
+        if catalog_options:
+            prompt_parts.append(f"Catalog Options:\n{catalog_options}")
+
         prompt = "\n\n".join(prompt_parts)
 
-        logger.info(f"Sending prompt to orchestrator:\n{prompt}")
-        print(f"✓ Orchestrator prompt:\n{prompt}")
+        logger.info(f"Executing graph with prompt:\n{prompt}")
+        print(f"✓ Graph execution starting")
 
-        response = agent(prompt)
-        return str(response)
+        # Execute the graph
+        result = graph(prompt)
+
+        print(f"✓ Graph execution completed")
+        logger.info(f"Graph execution completed")
+
+        # Return the final result
+        return str(result)
 
     except Exception as e:
         logger.error(f"Error processing grocery list: {e}")
+        import traceback
+        traceback.print_exc()
         return f"Error: {str(e)}"
 
 

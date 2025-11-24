@@ -8,6 +8,8 @@ import json
 import logging
 import time
 import boto3
+import pathlib
+import shutil
 
 
 def setup_gateway():
@@ -59,6 +61,12 @@ def setup_gateway():
 
     with open("gateway_config.json", "w") as f:
         json.dump(config, f, indent=2)
+    
+    # Copy gateway_config.json to runtime directory for Docker build
+    runtime_dir = pathlib.Path(__file__).parent.parent / "runtime"
+    runtime_config_path = runtime_dir / "gateway_config.json"
+    shutil.copy("gateway_config.json", runtime_config_path)
+    print(f"✓ Configuration copied to: {runtime_config_path}\n")
 
     # Step 2.4: Store client_info in AWS Secrets Manager
     print("Step 2.4: Storing credentials in AWS Secrets Manager...")
@@ -83,7 +91,9 @@ def setup_gateway():
     print("✅ Gateway setup complete!")
     print(f"Gateway URL: {gateway['gatewayUrl']}")
     print(f"Gateway ID: {gateway['gatewayId']}")
-    print("\nConfiguration saved to: gateway_config.json")
+    print("\nConfiguration saved to:")
+    print("  - gateway/gateway_config.json")
+    print("  - runtime/gateway_config.json (for Docker build)")
     print("\nNext step: Run 'python test_gateway.py' to test your Gateway")
     print("=" * 60)
 

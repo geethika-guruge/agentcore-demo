@@ -1,13 +1,13 @@
 {
-  "gateway_url": "https://testgatewaye25d16e8-tjt4pdlpim.gateway.bedrock-agentcore.ap-southeast-2.amazonaws.com/mcp",
-  "gateway_id": "testgatewaye25d16e8-tjt4pdlpim",
+  "gateway_url": "https://testgatewaya3896042-qezod8xcbs.gateway.bedrock-agentcore.ap-southeast-2.amazonaws.com/mcp",
+  "gateway_id": "testgatewaya3896042-qezod8xcbs",
   "region": "ap-southeast-2",
   "client_info": {
-    "client_id": "2ptm7ms10mnf3pl6qfu3iiedtv",
-    "client_secret": "1uruhm0aq27r5i9un5vk3fvlp2rkmp9gbdvne4su7lut19smso6o",
-    "user_pool_id": "ap-southeast-2_kpEikW78h",
-    "token_endpoint": "https://agentcore-33785629.auth.ap-southeast-2.amazoncognito.com/oauth2/token",
+    "client_id": "38ofr4jsh60v6htjfu73hu0e2o",
+    "client_secret": "ug3km0fdgf0p8l64p3od4811fffjpib2t2372pn1qa0s3ggjc7i",
+    "user_pool_id": "ap-southeast-2_2DjkDefzF",
+    "token_endpoint": "https://agentcore-e7e6097a.auth.ap-southeast-2.amazoncognito.com/oauth2/token",
     "scope": "TestGateway/invoke",
-    "domain_prefix": "agentcore-33785629"
+    "domain_prefix": "agentcore-e7e6097a"
   }
 }

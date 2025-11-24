@@ -189,6 +189,18 @@ class OrderAssistantStack(Stack):
             removal_policy=RemovalPolicy.DESTROY,  # For development - change to RETAIN for production
         )
 
+        # Create Pending Orders table for storing catalog options temporarily
+        pending_orders_table = dynamodb.Table(
+            self,
+            "PendingOrdersTable",
+            partition_key=dynamodb.Attribute(
+                name="customer_id", type=dynamodb.AttributeType.STRING
+            ),
+            billing_mode=dynamodb.BillingMode.PAY_PER_REQUEST,
+            removal_policy=RemovalPolicy.DESTROY,
+            time_to_live_attribute="ttl",  # Enable TTL for automatic cleanup
+        )
+
         process_order_lambda = _lambda.Function(
             self,
             "ProcessOrder",
@@ -196,9 +208,10 @@ class OrderAssistantStack(Stack):
             handler="lambda.handler",
             code=_lambda.Code.from_asset("src/lambda/process_order"),
             environment={
-                "PHONE_NUMBER_ID": "phone-number-id-8d1a60afd7f04396bc835981f6bee47a",  # Your WhatsApp phone number ID
+                "PHONE_NUMBER_ID": "phone-number-id-f82a097f349f44798c5926fb29db1ac1",  # Your WhatsApp phone number ID
                 "MEDIA_BUCKET_NAME": bucket.bucket_name,
                 "AGENT_ARN_PARAM": agent_arn_param.parameter_name,
+                "PENDING_ORDERS_TABLE": pending_orders_table.table_name,
             },
             timeout=Duration.minutes(15),
         )

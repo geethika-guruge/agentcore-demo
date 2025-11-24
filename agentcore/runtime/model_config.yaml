@@ -1,0 +1,25 @@
+# Model configuration for all agents in the order assistant system
+# This file defines model settings for each agent in the graph-based multi-agent system
+# All configuration is read directly from this file - no environment variable overrides
+
+# Agent-specific model configurations
+agents:
+  orchestrator:
+    model_id: "apac.anthropic.claude-sonnet-4-20250514-v1:0"
+    region: "ap-southeast-2"
+
+  catalog:
+    model_id: "global.anthropic.claude-haiku-4-5-20251001-v1:0"
+    region: "ap-southeast-2"
+
+  order:
+    model_id: "apac.anthropic.claude-sonnet-4-20250514-v1:0"
+    region: "ap-southeast-2"
+
+  warehouse:
+    model_id: "apac.amazon.nova-lite-v1:0"
+    region: "ap-southeast-2"
+
+  image_processor:
+    model_id: "apac.anthropic.claude-sonnet-4-20250514-v1:0"
+    region: "ap-southeast-2"
