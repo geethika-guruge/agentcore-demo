@@ -4,3 +4,5 @@ strands-agents-tools
 bedrock-agentcore-starter-toolkit
 mcp
 boto3
+openinference-instrumentation-bedrock
+arize-otel

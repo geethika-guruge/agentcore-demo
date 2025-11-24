@@ -1,0 +1,14 @@
+# OpenTelemetry Configuration for Arize Tracing
+# Replace the placeholder values below with your actual Arize credentials
+
+# Your Arize Space ID (found in Arize platform settings)
+space_id: "U3BhY2U6MjEzMTI6WTJqRA=="
+
+# Your Arize API Key (found in Arize platform settings)
+api_key: "ak-5c2a77ce-5832-498d-87d5-89fc98ab11f5-jRNL7J5-C5GGNpee3dZPwLaZnBrOHD3c"
+
+# Project name for organizing traces in Arize
+project_name: "pex304-demo-gg"
+
+# Optional: Environment name for separating dev/staging/prod traces
+# environment: "production"

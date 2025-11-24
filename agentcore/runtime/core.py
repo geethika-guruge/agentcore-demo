@@ -14,6 +14,10 @@ import boto3
 from strands.multiagent import GraphBuilder
 import yaml
 
+# OpenTelemetry imports for tracing
+from arize.otel import register
+from openinference.instrumentation.bedrock import BedrockInstrumentor
+
 BASE_DIR = pathlib.Path(__file__).absolute().parent
 
 # Use root logger to ensure logs appear in CloudWatch
@@ -23,6 +27,8 @@ if not logger.handlers:
 
 # Load model configuration
 MODEL_CONFIG = None
+OTEL_CONFIG = None
+TRACER_PROVIDER = None
 
 
 def load_model_config() -> Dict[str, Any]:
@@ -44,6 +50,87 @@ def load_model_config() -> Dict[str, Any]:
     except Exception as e:
         logger.error(f"Error loading model config: {e}")
         raise
+
+
+def load_otel_config() -> Dict[str, Any]:
+    """Load OpenTelemetry configuration from YAML file"""
+    global OTEL_CONFIG
+
+    if OTEL_CONFIG is not None:
+        return OTEL_CONFIG
+
+    # Try multiple possible locations for the config file
+    possible_paths = [
+        BASE_DIR / ".otel_config.yaml",  # Same directory as core.py (in container)
+        pathlib.Path("/app/.otel_config.yaml"),  # Container root
+        BASE_DIR.parent.parent / ".otel_config.yaml",  # Project root (local dev)
+    ]
+
+    for config_path in possible_paths:
+        try:
+            if config_path.exists():
+                with open(config_path, "r") as f:
+                    OTEL_CONFIG = yaml.safe_load(f)
+                print(f"[OTel] Loaded configuration from {config_path}")
+
+                # Validate required fields
+                required_fields = ["space_id", "api_key", "project_name"]
+                for field in required_fields:
+                    if not OTEL_CONFIG.get(field) or OTEL_CONFIG[field].startswith("YOUR_"):
+                        print(f"[OTel] WARNING: Config field '{field}' not configured - using placeholder")
+
+                return OTEL_CONFIG
+        except Exception as e:
+            print(f"[OTel] Error loading config from {config_path}: {e}")
+            continue
+
+    print(f"[OTel] Config file not found in any of the expected locations: {[str(p) for p in possible_paths]}")
+    print("[OTel] Tracing will be disabled.")
+    return None
+
+
+def initialize_otel_tracing():
+    """Initialize OpenTelemetry tracing with Arize"""
+    global TRACER_PROVIDER
+
+    if TRACER_PROVIDER is not None:
+        return TRACER_PROVIDER
+
+    try:
+        config = load_otel_config()
+
+        if not config:
+            print("[OTel] Tracing disabled - no configuration found")
+            return None
+
+        # Check if config has placeholder values
+        if (config.get("space_id", "").startswith("YOUR_") or
+            config.get("api_key", "").startswith("YOUR_") or
+            config.get("project_name", "").startswith("YOUR_")):
+            print("[OTel] Tracing disabled - configuration contains placeholder values")
+            return None
+
+        # Register with Arize
+        print("[OTel] Initializing tracing with Arize...")
+        TRACER_PROVIDER = register(
+            space_id=config["space_id"],
+            api_key=config["api_key"],
+            project_name=config["project_name"],
+        )
+
+        # Instrument Bedrock
+        BedrockInstrumentor().instrument(tracer_provider=TRACER_PROVIDER)
+
+        print("[OTel] ✓ Tracing initialized successfully")
+        print(f"[OTel] ✓ Traces will be sent to Arize project: {config['project_name']}")
+
+        return TRACER_PROVIDER
+
+    except Exception as e:
+        print(f"[OTel] ERROR: Failed to initialize tracing: {e}")
+        print("[OTel] Continuing without tracing...")
+        return None
+
 
 # Global state
 bedrock_model = None
@@ -232,6 +319,9 @@ def create_bedrock_model(agent_name: str) -> BedrockModel:
 def initialize_agents():
     """Initialize the specialized agents with individual model configurations"""
     global catalog_agent, order_agent, wm_agent, image_processor_agent, bedrock_model
+
+    # Initialize OpenTelemetry tracing
+    initialize_otel_tracing()
 
     # Load custom PostgreSQL tools for product catalog
     postgres_tools = load_mcp_tools(
