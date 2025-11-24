@@ -28,8 +28,8 @@ agents:
         idle_runtime_session_timeout: null
         max_lifetime: null
     bedrock_agentcore:
-      agent_id: order_assistant-PBiN0O4lZ7
-      agent_arn: arn:aws:bedrock-agentcore:ap-southeast-2:610251782643:runtime/order_assistant-PBiN0O4lZ7
+      agent_id: order_assistant-2Ia07Y64Aq
+      agent_arn: arn:aws:bedrock-agentcore:ap-southeast-2:354334841216:runtime/order_assistant-2Ia07Y64Aq
       agent_session_id: null
     codebuild:
       project_name: bedrock-agentcore-order_assistant-builder
