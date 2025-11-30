@@ -5,13 +5,20 @@
 
 set -e
 
-REGION="ap-southeast-2"
+# Get region from AWS CLI configuration
+REGION=$(aws configure get region)
+if [ -z "$REGION" ]; then
+    echo "❌ Error: No AWS region configured"
+    echo "   Run: aws configure set region <your-region>"
+    exit 1
+fi
+
+echo "Using AWS region: $REGION"
 STACK_NAME="OrderAssistantStack"
 
 echo "🔍 Getting Lambda function name from CloudFormation stack..."
 LAMBDA_NAME=$(aws cloudformation describe-stacks \
     --stack-name $STACK_NAME \
-    --region $REGION \
     --query "Stacks[0].Outputs[?OutputKey=='PopulateCatalogLambdaName'].OutputValue" \
     --output text)
 
@@ -51,7 +58,6 @@ echo ""
 # Invoke the Lambda function
 RESPONSE=$(aws lambda invoke \
     --function-name $LAMBDA_NAME \
-    --region $REGION \
     --payload "{\"operation\": \"$OPERATION\", \"clear_existing\": $CLEAR_EXISTING}" \
     --cli-binary-format raw-in-base64-out \
     /tmp/populate_db_response.json)

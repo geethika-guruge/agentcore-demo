@@ -9,13 +9,16 @@ import boto3
 import psycopg2
 from psycopg2.extras import execute_values
 
+# Get region from AWS session (uses AWS profile configuration)
+session = boto3.Session()
+AWS_REGION = session.region_name
+
 
 def get_db_credentials():
     """Retrieve database credentials from Secrets Manager."""
     secret_arn = os.environ["POSTGRES_SECRET_ARN"]
-    region = os.environ.get("AWS_REGION", "ap-southeast-2")
 
-    secrets_client = boto3.client("secretsmanager", region_name=region)
+    secrets_client = session.client("secretsmanager")
     secret_response = secrets_client.get_secret_value(SecretId=secret_arn)
     credentials = json.loads(secret_response["SecretString"])
 

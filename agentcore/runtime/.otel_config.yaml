@@ -8,7 +8,7 @@ space_id: "U3BhY2U6MjEzMTI6WTJqRA=="
 api_key: "ak-5c2a77ce-5832-498d-87d5-89fc98ab11f5-jRNL7J5-C5GGNpee3dZPwLaZnBrOHD3c"
 
 # Project name for organizing traces in Arize
-project_name: "pex304-demo-gg"
+project_name: "pex304-demo-gg-ap-southeast-2"
 
 # Optional: Environment name for separating dev/staging/prod traces
 # environment: "production"

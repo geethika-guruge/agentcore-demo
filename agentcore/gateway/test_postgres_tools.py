@@ -6,6 +6,7 @@ Tests search_products_by_product_names and list_product_catalogue tools
 
 import json
 import sys
+import boto3
 from pathlib import Path
 
 # Add parent directory to path to import gateway client
@@ -13,15 +14,24 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from bedrock_agentcore_starter_toolkit.operations.gateway.client import GatewayClient
 
-# Load gateway configuration
-gateway_config_path = Path(__file__).parent.parent / "runtime" / "gateway_config.json"
-with open(gateway_config_path, "r") as f:
-    config = json.load(f)
+# Get region from AWS session (uses AWS profile configuration)
+session = boto3.Session()
+region = session.region_name
 
-gateway_url = config["gateway_url"]
-gateway_id = config["gateway_id"]
-region = config["region"]
-client_info = config.get("client_info")
+# Fetch gateway configuration from SSM Parameter Store
+ssm_client = session.client("ssm")
+
+gateway_id_response = ssm_client.get_parameter(Name="/order-assistant/gateway-id")
+gateway_id = gateway_id_response["Parameter"]["Value"]
+
+gateway_url_response = ssm_client.get_parameter(Name="/order-assistant/gateway-url")
+gateway_url = gateway_url_response["Parameter"]["Value"]
+
+# Get client_info from Secrets Manager
+secrets_client = session.client("secretsmanager")
+secret_name = f"agentcore/gateway/{gateway_id}/client-info"
+response = secrets_client.get_secret_value(SecretId=secret_name)
+client_info = json.loads(response["SecretString"])
 
 # Get access token
 print("Getting access token for MCP gateway...")

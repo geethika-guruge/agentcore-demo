@@ -2,15 +2,21 @@ import requests
 import json
 import boto3
 
-# Get client info from Secrets Manager
-region = "ap-southeast-2"
+# Get region from AWS session (uses AWS profile configuration)
+session = boto3.Session()
+region = session.region_name
 
-with open("gateway_config.json", "r") as f:
-    config = json.load(f)
+# Fetch gateway configuration from SSM Parameter Store
+ssm_client = session.client("ssm")
 
-gateway_id = config["gateway_id"]
+gateway_id_response = ssm_client.get_parameter(Name="/order-assistant/gateway-id")
+gateway_id = gateway_id_response["Parameter"]["Value"]
 
-secrets_client = boto3.client("secretsmanager", region_name=region)
+gateway_url_response = ssm_client.get_parameter(Name="/order-assistant/gateway-url")
+gateway_url = gateway_url_response["Parameter"]["Value"]
+
+# Get client_info from Secrets Manager
+secrets_client = session.client("secretsmanager")
 secret_name = f"agentcore/gateway/{gateway_id}/client-info"
 response = secrets_client.get_secret_value(SecretId=secret_name)
 client_info = json.loads(response["SecretString"])
@@ -47,7 +53,6 @@ def list_tools(gateway_url, access_token):
 
 
 # Example usage
-gateway_url = config["gateway_url"]
 print(f"Testing gateway: {gateway_url}\n")
 
 access_token = fetch_access_token(CLIENT_ID, CLIENT_SECRET, TOKEN_URL)

@@ -5,16 +5,21 @@ Usage: python register_postgres_tools.py
 
 import json
 import pathlib
+import boto3
 from bedrock_agentcore_starter_toolkit.operations.gateway.client import GatewayClient
 
-# Load gateway configuration
-config_path = pathlib.Path(__file__).parent.parent.parent / "gateway_config.json"
-with open(config_path, "r") as f:
-    gateway_config = json.load(f)
+# Get region from AWS session (uses AWS profile configuration)
+session = boto3.Session()
+region = session.region_name
 
-# Initialize client
-region = gateway_config["region"]
-gateway_id = gateway_config["gateway_id"]
+# Fetch gateway configuration from SSM Parameter Store
+ssm_client = session.client("ssm")
+
+gateway_id_response = ssm_client.get_parameter(Name="/order-assistant/gateway-id")
+gateway_id = gateway_id_response["Parameter"]["Value"]
+
+gateway_url_response = ssm_client.get_parameter(Name="/order-assistant/gateway-url")
+gateway_url = gateway_url_response["Parameter"]["Value"]
 
 print(f"🔧 Registering PostgreSQL MCP tools with Gateway: {gateway_id}")
 print(f"Region: {region}\n")
@@ -33,9 +38,7 @@ for tool_file in sorted(tools_dir.glob("*.json")):
 tools_config = {"tools": tools_list}
 
 # Get Lambda ARN from CloudFormation outputs
-import boto3
-
-cfn = boto3.client("cloudformation", region_name=region)
+cfn = session.client("cloudformation")
 response = cfn.describe_stacks(StackName="OrderAssistantStack")
 outputs = response["Stacks"][0]["Outputs"]
 lambda_arn = next(
@@ -45,7 +48,7 @@ lambda_arn = next(
 print(f"Lambda ARN: {lambda_arn}\n")
 
 # Get or create the gateway
-gateway = {"gatewayId": gateway_id, "gatewayUrl": gateway_config["gateway_url"]}
+gateway = {"gatewayId": gateway_id, "gatewayUrl": gateway_url}
 
 # Create Lambda target with tool definitions
 print("Creating Lambda target with tool definitions...")
