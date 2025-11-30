@@ -4,47 +4,18 @@ import logging
 import os
 import time
 
-# OpenTelemetry imports (optional - gracefully degrades if not available)
-try:
-    from arize.otel import register
-    from openinference.instrumentation.bedrock import BedrockInstrumentor
-    OTEL_AVAILABLE = True
-except ImportError:
-    OTEL_AVAILABLE = False
-    print("[Lambda OTel] OpenTelemetry packages not available - tracing disabled")
-
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
-# Initialize OpenTelemetry tracing if available
-if OTEL_AVAILABLE:
-    try:
-        # Get Arize credentials from environment variables
-        space_id = os.environ.get("ARIZE_SPACE_ID")
-        api_key = os.environ.get("ARIZE_API_KEY")
-        project_name = os.environ.get("ARIZE_PROJECT_NAME", "order-assistant-lambda")
+# Get region from AWS session (uses AWS profile configuration)
+session = boto3.Session()
+AWS_REGION = session.region_name
+logger.info(f"Lambda using AWS region from session: {AWS_REGION}")
 
-        if space_id and api_key:
-            print("[Lambda OTel] Initializing tracing with Arize...")
-            tracer_provider = register(
-                space_id=space_id,
-                api_key=api_key,
-                project_name=project_name,
-            )
-
-            # Instrument Bedrock
-            BedrockInstrumentor().instrument(tracer_provider=tracer_provider)
-
-            print(f"[Lambda OTel] ✓ Tracing initialized - project: {project_name}")
-        else:
-            print("[Lambda OTel] Arize credentials not found in environment - tracing disabled")
-    except Exception as e:
-        print(f"[Lambda OTel] Failed to initialize tracing: {e}")
-
-social_messaging = boto3.client("socialmessaging", region_name="ap-southeast-2")
-agentcore = boto3.client("bedrock-agentcore", region_name="ap-southeast-2")
-ssm = boto3.client("ssm", region_name="ap-southeast-2")
-s3 = boto3.client("s3", region_name="ap-southeast-2")
+social_messaging = session.client("socialmessaging")
+agentcore = session.client("bedrock-agentcore")
+ssm = session.client("ssm")
+s3 = session.client("s3")
 
 # Environment variables
 PHONE_NUMBER_ID = os.environ.get("PHONE_NUMBER_ID")
@@ -56,7 +27,7 @@ PENDING_ORDERS_TABLE = os.environ.get("PENDING_ORDERS_TABLE")
 AGENT_ARN = None
 
 # DynamoDB client for pending orders
-dynamodb_client = boto3.client("dynamodb", region_name="ap-southeast-2")
+dynamodb_client = session.client("dynamodb")
 
 
 def get_agent_arn():
@@ -125,65 +96,82 @@ def extract_agent_message(response_data):
     - Path 2 (Order): router → order → warehouse → router [END]
 
     Args:
-        response_data: The parsed JSON response from agent
+        response_data: The parsed JSON response from agent (dict or GraphResult object)
 
     Returns:
         str: Extracted message text from router node
     """
     import re
 
-    if not isinstance(response_data, str):
-        logger.warning("Response data is not a string, converting to string")
-        response_data = str(response_data)
-
     logger.info("Extracting message from agent response")
+    logger.info(f"Response data type: {type(response_data)}")
 
-    # Pattern to match node results with their message content
-    # Captures: node_name and message text
-    pattern = r"'(\w+)':\s*NodeResult\(.*?message=\{'role':\s*'assistant',\s*'content':\s*\[\{'text':\s*'((?:[^'\\]|\\.)*)'\}\]"
+    # Handle string response (direct message text from agentcore)
+    if isinstance(response_data, str):
+        logger.info("Response is a string (direct message text)")
+        message_text = response_data
 
-    # Find all node matches
-    all_matches = []
-    for match in re.finditer(pattern, response_data, re.DOTALL):
-        node_name = match.group(1)
-        message_content = match.group(2)
-        all_matches.append({
-            'node': node_name,
-            'message': message_content
-        })
+    # Handle dict response (legacy format or structured response)
+    elif isinstance(response_data, dict):
+        logger.info("Processing dict response structure")
+        results = response_data.get('results', {})
 
-    if not all_matches:
-        logger.error("No node results found in response")
-        return "Error: Unable to process the response. Please try again."
+        if not results:
+            logger.error("No results found in response")
+            return "Error: Unable to process the response. Please try again."
 
-    # Log all found nodes for debugging
-    node_names = [m['node'] for m in all_matches]
-    logger.info(f"Found {len(all_matches)} node results: {node_names}")
+        # Log all available nodes
+        node_names = list(results.keys())
+        logger.info(f"Found {len(node_names)} node results: {node_names}")
 
-    # Always use router node (terminal node in our graph)
-    router_match = next((m for m in all_matches if m['node'] == 'router'), None)
+        # Try to get router node first (terminal node)
+        target_node = 'router'
+        if target_node not in results:
+            logger.warning(f"Router node not found! Available nodes: {node_names}")
+            # Fallback to last node
+            target_node = node_names[-1] if node_names else None
+            if target_node:
+                logger.warning(f"Using fallback node: '{target_node}'")
+            else:
+                logger.error("No nodes available in results")
+                return "Error: Unable to process the response. Please try again."
+        else:
+            logger.info("Using router node (terminal node)")
 
-    if not router_match:
-        logger.warning("Router node not found! Using last node as fallback")
-        router_match = all_matches[-1]
-        logger.warning(f"Fallback node: '{router_match['node']}'")
+        # Navigate to the message text
+        node_result = results[target_node]
+
+        # Handle nested structure: result.message.content[0].text
+        try:
+            if 'result' in node_result:
+                message_data = node_result['result'].get('message', {})
+            else:
+                message_data = node_result.get('message', {})
+
+            content = message_data.get('content', [])
+            if not content:
+                logger.error(f"No content found in {target_node} node message")
+                return "Error: Unable to process the response. Please try again."
+
+            message_text = content[0].get('text', '')
+
+            if not message_text:
+                logger.error(f"No text found in {target_node} node content")
+                return "Error: Unable to process the response. Please try again."
+
+            logger.info(f"Successfully extracted message from '{target_node}' node")
+
+        except (KeyError, IndexError, TypeError) as e:
+            logger.error(f"Error navigating response structure: {e}")
+            logger.error(f"Node result structure: {node_result}")
+            return "Error: Unable to process the response. Please try again."
+
     else:
-        logger.info("Using router node (terminal node)")
-
-    extracted_text = router_match['message']
-
-    # Unescape Python string escape sequences
-    # Order matters: handle \\ first to avoid double-unescaping
-    message_text = (
-        extracted_text
-        .replace('\\\\', '\x00')  # Temporarily replace \\ to preserve it
-        .replace('\\n', '\n')
-        .replace('\\t', '\t')
-        .replace('\\r', '\r')
-        .replace("\\'", "'")
-        .replace('\\"', '"')
-        .replace('\x00', '\\')  # Restore single backslash
-    )
+        # Fallback: convert to string and log warning
+        logger.warning(f"Response is not a dict (type: {type(response_data)}), converting to string")
+        response_str = str(response_data)
+        logger.info(f"Response string (first 500 chars): {response_str[:500]}")
+        return "Error: Unexpected response format. Please try again."
 
     # Remove <thinking> tags and their content
     message_text = re.sub(r'<thinking>.*?</thinking>', '', message_text, flags=re.DOTALL)
@@ -320,7 +308,10 @@ def reply(customer_message, session_id):
 
             # Read and parse response
             response_body = agent_response["response"].read()
+            logger.info(f"Response body type: {type(response_body)}")
+            logger.info(f"Response body (first 500 chars): {str(response_body)[:500]}")
             response_data = json.loads(response_body)
+            logger.info(f"Parsed response_data type: {type(response_data)}")
 
             # Extract message from router node (terminal node)
             message_text = extract_agent_message(response_data)
@@ -486,16 +477,19 @@ def handle_image_message(customer_message, session_id):
         )
         # Read and parse response
         response_body = agent_response["response"].read()
+        logger.info(f"Response body type: {type(response_body)}")
+        logger.info(f"Response body (first 500 chars): {str(response_body)[:500]}")
         response_data = json.loads(response_body)
+        logger.info(f"Parsed response_data type: {type(response_data)}")
 
         # Extract message from router node (terminal node)
         message_text = extract_agent_message(response_data)
         logger.info("Agent processing completed")
 
-        # Store catalog options for Path 1 (catalog node returns options)
-        if "catalog" in str(response_data).lower() and "option 1" in message_text.lower() and "option 2" in message_text.lower():
-            logger.info("Detected catalog options in response - storing for later retrieval")
-            store_catalog_options(customer_message["from"], message_text)
+        # Store catalog options for Path 1 (image processing always returns catalog options)
+        # Path 1: router → image_processor → catalog → router [END]
+        logger.info("Path 1 (PROCESS_IMAGE) - storing catalog options for later order confirmation")
+        store_catalog_options(customer_message["from"], message_text)
 
         # Send agent response to user
         logger.info(f"About to send agent response to customer {customer_message['from']}")

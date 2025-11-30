@@ -13,15 +13,66 @@ import shutil
 
 
 def setup_gateway():
-    # Configuration
-    region = "ap-southeast-2"  # Change to your preferred region
+    # Get region from AWS session (uses AWS profile configuration)
+    session = boto3.Session()
+    region = session.region_name
 
     print("🚀 Setting up AgentCore Gateway...")
     print(f"Region: {region}\n")
 
-    # Initialize client
+    # Initialize clients
     client = GatewayClient(region_name=region)
     client.logger.setLevel(logging.INFO)
+    ssm_client = session.client("ssm")
+    secrets_client = session.client("secretsmanager")
+
+    # Check if gateway config file already exists
+    config_filename = f"gateway_config_{region}.json"
+    existing_gateway_id = None
+
+    if pathlib.Path(config_filename).exists():
+        print(f"Found existing config file: {config_filename}")
+        with open(config_filename, "r") as f:
+            existing_config = json.load(f)
+            existing_gateway_id = existing_config.get("gateway_id")
+
+        if existing_gateway_id:
+            # Verify the gateway exists in AWS by checking SSM
+            try:
+                ssm_gateway_id = ssm_client.get_parameter(Name="/order-assistant/gateway-id")["Parameter"]["Value"]
+                if ssm_gateway_id == existing_gateway_id:
+                    print(f"✓ Gateway already exists: {existing_gateway_id}")
+                    print("Gateway is already configured. Use this gateway or delete the config file to create a new one.\n")
+
+                    # Get gateway details from SSM
+                    gateway_url = ssm_client.get_parameter(Name="/order-assistant/gateway-url")["Parameter"]["Value"]
+
+                    print("=" * 60)
+                    print("✅ Gateway already configured!")
+                    print(f"Gateway URL: {gateway_url}")
+                    print(f"Gateway ID: {existing_gateway_id}")
+                    print(f"\nConfiguration file: {config_filename}")
+                    print("=" * 60)
+
+                    return {
+                        "gateway_id": existing_gateway_id,
+                        "gateway_url": gateway_url,
+                        "region": region,
+                    }
+            except ssm_client.exceptions.ParameterNotFound:
+                print(f"⚠️  Gateway ID in config file doesn't match SSM. Creating new gateway...\n")
+
+    # Fetch Gateway execution role ARN from SSM
+    try:
+        response = ssm_client.get_parameter(
+            Name="/order-assistant/gateway-execution-role-arn"
+        )
+        gateway_role_arn = response["Parameter"]["Value"]
+        print(f"✓ Fetched Gateway execution role ARN from SSM: {gateway_role_arn}\n")
+    except ssm_client.exceptions.ParameterNotFound:
+        print("❌ Gateway execution role ARN not found in SSM.")
+        print("Please deploy the CDK stack first using: cdk deploy\n")
+        return None
 
     # Step 2.1: Create OAuth authorizer
     print("Step 2.1: Creating OAuth authorization server...")
@@ -35,7 +86,7 @@ def setup_gateway():
         name=None,
         # the role arn that the Gateway will use - if you don't set one, one will be created.
         # NOTE: if you are using your own role make sure it has a trust policy that trusts bedrock-agentcore.amazonaws.com
-        role_arn=None,
+        role_arn=gateway_role_arn,
         # the OAuth authorization server details. If you are providing your own authorization server,
         # then pass an input of the following form: {"customJWTAuthorizer": {"allowedClients": ["<INSERT CLIENT ID>"], "discoveryUrl": "<INSERT DISCOVERY URL>"}}
         authorizer_config=cognito_response["authorizer_config"],
@@ -44,33 +95,38 @@ def setup_gateway():
     )
     print(f"✓ Gateway created: {gateway['gatewayUrl']}\n")
 
-    # If role_arn was not provided, fix IAM permissions
-    # NOTE: This is handled internally by the toolkit when no role is provided
-    client.fix_iam_permissions(gateway)
-    print("⏳ Waiting 30s for IAM propagation...")
-    time.sleep(30)
-    print("✓ IAM permissions configured\n")
-
-    # Step 2.3: Save configuration for agent
+    # Step 2.3: Save minimal configuration for reference (gateway_url and client_info are in SSM/Secrets Manager)
     config = {
-        "gateway_url": gateway["gatewayUrl"],
         "gateway_id": gateway["gatewayId"],
         "region": region,
-        "client_info": cognito_response["client_info"],
     }
 
-    with open("gateway_config.json", "w") as f:
+    config_filename = f"gateway_config_{region}.json"
+    with open(config_filename, "w") as f:
         json.dump(config, f, indent=2)
-    
-    # Copy gateway_config.json to runtime directory for Docker build
-    runtime_dir = pathlib.Path(__file__).parent.parent / "runtime"
-    runtime_config_path = runtime_dir / "gateway_config.json"
-    shutil.copy("gateway_config.json", runtime_config_path)
-    print(f"✓ Configuration copied to: {runtime_config_path}\n")
+    print(f"✓ Minimal configuration saved to: {config_filename}\n")
 
-    # Step 2.4: Store client_info in AWS Secrets Manager
-    print("Step 2.4: Storing credentials in AWS Secrets Manager...")
-    secrets_client = boto3.client("secretsmanager", region_name=region)
+    # Step 2.4: Store gateway_id and gateway_url in SSM Parameter Store
+    print("Step 2.4: Storing gateway configuration in SSM Parameter Store...")
+    ssm_client.put_parameter(
+        Name="/order-assistant/gateway-id",
+        Value=gateway["gatewayId"],
+        Description="AgentCore Gateway ID",
+        Type="String",
+        Overwrite=True,
+    )
+    ssm_client.put_parameter(
+        Name="/order-assistant/gateway-url",
+        Value=gateway["gatewayUrl"],
+        Description="AgentCore Gateway URL",
+        Type="String",
+        Overwrite=True,
+    )
+    print(f"✓ Gateway URL stored in SSM: /order-assistant/gateway-url\n")
+
+    # Step 2.5: Store client_info in AWS Secrets Manager
+    print("Step 2.5: Storing credentials in AWS Secrets Manager...")
+    secrets_client = session.client("secretsmanager")
     secret_name = f"agentcore/gateway/{gateway['gatewayId']}/client-info"
 
     try:
@@ -91,10 +147,9 @@ def setup_gateway():
     print("✅ Gateway setup complete!")
     print(f"Gateway URL: {gateway['gatewayUrl']}")
     print(f"Gateway ID: {gateway['gatewayId']}")
-    print("\nConfiguration saved to:")
-    print("  - gateway/gateway_config.json")
-    print("  - runtime/gateway_config.json (for Docker build)")
-    print("\nNext step: Run 'python test_gateway.py' to test your Gateway")
+    print(f"\nConfiguration saved to:")
+    print(f"  - gateway/{config_filename}")
+    print(f"\nNext step: Run 'python test_gateway.py' to test your Gateway")
     print("=" * 60)
 
     return config

@@ -20,22 +20,8 @@ import pathlib
 
 class OrderAssistantStack(Stack):
 
-    def __init__(self, scope: Construct, construct_id: str, **kwargs) -> None:
+    def __init__(self, scope: Construct, construct_id: str, phone_number_id: str, **kwargs) -> None:
         super().__init__(scope, construct_id, **kwargs)
-
-        # Read agent ARN from bedrock_agentcore.yaml
-        agentcore_config_path = (
-            pathlib.Path(__file__).parent.parent
-            / "agentcore"
-            / "runtime"
-            / ".bedrock_agentcore.yaml"
-        )
-        with open(agentcore_config_path, "r") as f:
-            agentcore_config = yaml.safe_load(f)
-
-        agent_arn = agentcore_config["agents"]["order_assistant"]["bedrock_agentcore"][
-            "agent_arn"
-        ]
 
         # Create IAM role for AgentCore Runtime
         agentcore_execution_role = iam.Role(
@@ -48,13 +34,31 @@ class OrderAssistantStack(Stack):
             ],
         )
 
-        # Create SSM parameter for agent ARN
-        agent_arn_param = ssm.StringParameter(
+        # Create IAM role for AgentCore Gateway
+        gateway_execution_role = iam.Role(
             self,
-            "AgentRuntimeArn",
-            parameter_name="/order-assistant/agent-runtime-arn",
-            string_value=agent_arn,
-            description="AgentCore Runtime ARN for order assistant",
+            "AgentCoreGatewayExecutionRole",
+            assumed_by=iam.ServicePrincipal("bedrock-agentcore.amazonaws.com"),
+            description="Execution role for AgentCore Gateway",
+            managed_policies=[
+                iam.ManagedPolicy.from_aws_managed_policy_name("AdministratorAccess")
+            ],
+        )
+
+        # Reference to the agent ARN parameter for granting permissions
+        agent_arn_param = ssm.StringParameter.from_string_parameter_name(
+            self,
+            "AgentRuntimeArnParam",
+            string_parameter_name="/order-assistant/agent-runtime-arn"
+        )
+
+        # Create SSM parameter for Gateway execution role ARN
+        gateway_role_param = ssm.StringParameter(
+            self,
+            "GatewayExecutionRoleArnParameter",
+            parameter_name="/order-assistant/gateway-execution-role-arn",
+            string_value=gateway_execution_role.role_arn,
+            description="AgentCore Gateway execution role ARN",
         )
 
         bucket = s3.Bucket(self, "OrderAssistantBucket")
@@ -217,7 +221,7 @@ class OrderAssistantStack(Stack):
             print(f"Warning: Could not load .otel_config.yaml for lambda: {e}")
 
         lambda_env = {
-            "PHONE_NUMBER_ID": "phone-number-id-f82a097f349f44798c5926fb29db1ac1",  # Your WhatsApp phone number ID
+            "PHONE_NUMBER_ID": phone_number_id,
             "MEDIA_BUCKET_NAME": bucket.bucket_name,
             "AGENT_ARN_PARAM": agent_arn_param.parameter_name,
             "PENDING_ORDERS_TABLE": pending_orders_table.table_name,
@@ -417,6 +421,12 @@ class OrderAssistantStack(Stack):
             "AgentCoreExecutionRoleArn",
             value=agentcore_execution_role.role_arn,
             description="AgentCore Runtime Execution Role ARN",
+        )
+        CfnOutput(
+            self,
+            "GatewayExecutionRoleArn",
+            value=gateway_execution_role.role_arn,
+            description="AgentCore Gateway Execution Role ARN",
         )
         CfnOutput(
             self,

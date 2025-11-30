@@ -7,10 +7,13 @@ Run this script after deploying the CDK stack to initialize delivery slots
 import boto3
 from datetime import datetime, timedelta
 
-region = "ap-southeast-2"
+# Get region from AWS session (uses AWS profile configuration)
+session = boto3.Session()
+region = session.region_name
+print(f"Using AWS region: {region}\n")
 
 # Get table name from CloudFormation outputs
-cfn = boto3.client("cloudformation", region_name=region)
+cfn = session.client("cloudformation")
 response = cfn.describe_stacks(StackName="OrderAssistantStack")
 outputs = response["Stacks"][0]["Outputs"]
 table_name = next(
@@ -19,7 +22,7 @@ table_name = next(
 
 print(f"Using DynamoDB table: {table_name}\n")
 
-dynamodb = boto3.resource("dynamodb", region_name=region)
+dynamodb = session.resource("dynamodb")
 table = dynamodb.Table(table_name)
 
 # Sample delivery slots with various statuses
