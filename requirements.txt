@@ -5,3 +5,7 @@ strands-agents
 strands-agents-tools
 bedrock-agentcore-starter-toolkit
 psycopg2-binary
+
+# OpenTelemetry dependencies for Arize tracing
+openinference-instrumentation-bedrock
+arize-otel

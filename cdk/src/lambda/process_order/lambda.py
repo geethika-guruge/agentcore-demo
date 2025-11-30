@@ -4,8 +4,42 @@ import logging
 import os
 import time
 
+# OpenTelemetry imports (optional - gracefully degrades if not available)
+try:
+    from arize.otel import register
+    from openinference.instrumentation.bedrock import BedrockInstrumentor
+    OTEL_AVAILABLE = True
+except ImportError:
+    OTEL_AVAILABLE = False
+    print("[Lambda OTel] OpenTelemetry packages not available - tracing disabled")
+
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
+
+# Initialize OpenTelemetry tracing if available
+if OTEL_AVAILABLE:
+    try:
+        # Get Arize credentials from environment variables
+        space_id = os.environ.get("ARIZE_SPACE_ID")
+        api_key = os.environ.get("ARIZE_API_KEY")
+        project_name = os.environ.get("ARIZE_PROJECT_NAME", "order-assistant-lambda")
+
+        if space_id and api_key:
+            print("[Lambda OTel] Initializing tracing with Arize...")
+            tracer_provider = register(
+                space_id=space_id,
+                api_key=api_key,
+                project_name=project_name,
+            )
+
+            # Instrument Bedrock
+            BedrockInstrumentor().instrument(tracer_provider=tracer_provider)
+
+            print(f"[Lambda OTel] ✓ Tracing initialized - project: {project_name}")
+        else:
+            print("[Lambda OTel] Arize credentials not found in environment - tracing disabled")
+    except Exception as e:
+        print(f"[Lambda OTel] Failed to initialize tracing: {e}")
 
 social_messaging = boto3.client("socialmessaging", region_name="ap-southeast-2")
 agentcore = boto3.client("bedrock-agentcore", region_name="ap-southeast-2")

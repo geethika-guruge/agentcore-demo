@@ -201,18 +201,41 @@ class OrderAssistantStack(Stack):
             time_to_live_attribute="ttl",  # Enable TTL for automatic cleanup
         )
 
+        # Read Arize credentials from .otel_config.yaml for lambda tracing
+        otel_config_path = pathlib.Path(__file__).parent.parent / ".otel_config.yaml"
+        arize_space_id = None
+        arize_api_key = None
+        arize_project_name = "order-assistant-lambda"
+
+        try:
+            with open(otel_config_path, "r") as f:
+                otel_config = yaml.safe_load(f)
+                arize_space_id = otel_config.get("space_id")
+                arize_api_key = otel_config.get("api_key")
+                arize_project_name = otel_config.get("project_name", arize_project_name)
+        except Exception as e:
+            print(f"Warning: Could not load .otel_config.yaml for lambda: {e}")
+
+        lambda_env = {
+            "PHONE_NUMBER_ID": "phone-number-id-f82a097f349f44798c5926fb29db1ac1",  # Your WhatsApp phone number ID
+            "MEDIA_BUCKET_NAME": bucket.bucket_name,
+            "AGENT_ARN_PARAM": agent_arn_param.parameter_name,
+            "PENDING_ORDERS_TABLE": pending_orders_table.table_name,
+        }
+
+        # Add Arize credentials if available
+        if arize_space_id and not arize_space_id.startswith("YOUR_"):
+            lambda_env["ARIZE_SPACE_ID"] = arize_space_id
+            lambda_env["ARIZE_API_KEY"] = arize_api_key
+            lambda_env["ARIZE_PROJECT_NAME"] = arize_project_name
+
         process_order_lambda = _lambda.Function(
             self,
             "ProcessOrder",
             runtime=_lambda.Runtime.PYTHON_3_12,
             handler="lambda.handler",
             code=_lambda.Code.from_asset("src/lambda/process_order"),
-            environment={
-                "PHONE_NUMBER_ID": "phone-number-id-f82a097f349f44798c5926fb29db1ac1",  # Your WhatsApp phone number ID
-                "MEDIA_BUCKET_NAME": bucket.bucket_name,
-                "AGENT_ARN_PARAM": agent_arn_param.parameter_name,
-                "PENDING_ORDERS_TABLE": pending_orders_table.table_name,
-            },
+            environment=lambda_env,
             timeout=Duration.minutes(15),
         )
 
